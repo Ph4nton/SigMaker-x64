@@ -29,103 +29,76 @@ int GetOccurenceCount( const qstring& strSig, bool bSkipOut = false )
 
 void SearchForSigs( const qstring& strSig )
 {
-    ea_t dwAddress = find_binary( inf.omin_ea, inf.omax_ea, strSig.c_str( ), 16, SEARCH_DOWN );
-
-    const char* pszMessage = "===========================\n";
+    const char* pszMessage = "======================\n";
 
     msg( pszMessage );
 
-	dwAddress = find_binary(inf.omin_ea, inf.omax_ea, strSig.c_str(), 16, SEARCH_DOWN);
+	ea_t dwAddress = find_binary(inf.omin_ea, inf.omax_ea, strSig.c_str(), 16, SEARCH_DOWN);
 
 	if (IsValidEA(dwAddress))
 	{
 		do
 		{
-			msg("sig found at %llX\n", dwAddress);
+			msg("Singnature Found at %llX\n", dwAddress);
 			dwAddress = find_binary(dwAddress + 1, inf.omax_ea, strSig.c_str(), 16, SEARCH_DOWN);
 		} while (IsValidEA(dwAddress));
 	}
+
     msg( pszMessage );
 }
 
-void ShowSearchDialog( const char* pszSignature, const char* pszMask )
+void ShowSearchDialog(void) //Code
 {
-    static const char szForm[] =
-        "Test Sig\n"
-        "\n"
-        "\n"
-        "  <Signature:A5:300:300::>\n"
-        "  <Mask:A6:100:100::>\n"
-        "\n";
+	static const char szForm[] =
+		"Test Sig\n"
+		"\n"
+		"\n"
+		"  <Signature:A5:200:200::>\n"
+		"  <Mask:A6:100:100::>\n"
+		"\n";
 
-    char szSignature[MAXSTR] = { 0 }, szMask[MAXSTR] = { 0 };
-    qstring strSig = "";
+	qstring strSig, strSigCode;
+	ea_t dwStart, dwEnd;
 
-    if (pszSignature)
-        qstrncpy( szSignature, pszSignature, sizeof( szSignature ) );
+	if (read_range_selection(get_current_viewer(), &dwStart, &dwEnd))
+	{
+		if (dwEnd - dwStart > 5)
+		{
+			insn_t cmd;
 
-    if (pszMask)
-        qstrncpy( szMask, pszMask, sizeof( szMask ) );
+			func_item_iterator_t fIterator;
+			bool isWithinRange = fIterator.set_range(dwStart, dwEnd);
 
-    if (ask_form( szForm, szSignature, szMask ) > 0)
-    {
-        show_wait_box( "please wait..." );
+			for (ea_t dwCurrentInstruction = fIterator.current();
+				decode_insn(&cmd, dwCurrentInstruction) != 0;
+				dwCurrentInstruction = fIterator.current())
+			{
+				if (cmd.size < 5)
+					AddBytesToSig(strSig, dwCurrentInstruction, cmd.size);
+				else
+					AddInsToSig(&cmd, strSig);
 
-        //msg( "%s %s\n", szSignature, szMask );
+				if (fIterator.next_not_tail() == false)
+					break;
+			}
+		}
+	}
 
-        CodeToIDAC( strSig, szSignature, szMask );
+	char szSignature[MAXSTR] = { 0 }, szMask[MAXSTR] = { 0 };
 
-        if (Settings.iLogLevel >= 3)
-            msg( "%s = %s %s\n", strSig.c_str( ), szSignature, szMask );
+	if (strSig.length() > 3)
+		qstrncpy(szSignature, strSig.c_str(), sizeof(szSignature));
 
-        SearchForSigs( strSig ); //*/
-
-        hide_wait_box( );
-    }
+	if (ask_form(szForm, szSignature, szMask) > 0)
+	{
+		show_wait_box("please wait...");
+		CodeToIDA(strSigCode, szSignature, szMask);
+		SearchForSigs(strSigCode);
+		hide_wait_box();
+	}
 }
 
-void ShowSearchDialog( void )
-{
-    char szSignature[MAXSTR] = { 0 }, szMask[MAXSTR] = { 0 };
-
-    qstring strSig, strSigCode;
-    ea_t dwStart, dwEnd;
-
-    if (read_range_selection( get_current_viewer( ), &dwStart, &dwEnd ))
-    {
-        if (dwEnd - dwStart > 5)
-        {
-            insn_t cmd;
-
-            func_item_iterator_t fIterator;
-            bool isWithinRange = fIterator.set_range( dwStart, dwEnd );
-
-            for (ea_t dwCurrentInstruction = fIterator.current( );
-                decode_insn( &cmd, dwCurrentInstruction ) != 0;
-                dwCurrentInstruction = fIterator.current( ))
-            {
-                if (cmd.size < 5)
-                    AddBytesToSig( strSig, dwCurrentInstruction, cmd.size );
-                else
-                    AddInsToSig( &cmd, strSig );
-
-                if (fIterator.next_not_tail( ) == false)
-                    break;
-            }
-        }
-    }
-
-    if (strSig.length( ) < 3)
-        return;
-
-    IDAToCode( strSig, strSigCode, szMask );
-
-    qstrncpy( szSignature, strSigCode.c_str( ), sizeof( szSignature ) );
-
-    ShowSearchDialog( szSignature, szMask );
-}
-
-void ShowSearchWindow( void )
+void ShowSearchWindow( void ) // IDA
 {
     static const char szForm[] =
         "Test Sig\n"

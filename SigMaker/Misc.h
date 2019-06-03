@@ -60,12 +60,13 @@ void AddBytesToSig( qstring& strSig, ea_t dwAddress, ea_t dwSize );
 void AddWhiteSpacesToSig( qstring& strSig, ea_t dwSize );
 
 // converter.cpp
-void IDAToCode( const qstring& strSig, qstring& pszByteSig, char* pszMask );
+void IDAToCode(const qstring& in_ida_sig, qstring& out_code_sig, char* pszMask);
 void CodeToIDA( qstring& strSig, const qstring& strByteSig, const qstring& strMask );
 void IDAToCRC( const qstring& strSig, ea_t& dwCRC32, ea_t& dwMask );
 void CodeToCRC( const qstring& strByteSig, const qstring& strMask, ea_t& dwCRC32, ea_t& dwMask );
 void CodeToIDAC( qstring& strSig, const char* strByteSig, const char* strMask );
 void ShowSigConverter( void );
+int Text2Hex(const char* pszString, unsigned char* pbArray, char* pszMask = NULL);
 
 // platform.cpp
 bool TextToClipboard( const char* pszText );

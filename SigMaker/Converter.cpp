@@ -1,70 +1,76 @@
 #include "Includes.h"
 #include "Misc.h"
 
-void ShowSigConverter( void )
+void ShowSigConverter(void)
 {
-    static const char szForm[] =
-        "Sig Converter\n"
-        "\n"
-        "\n"
-        "  <Sig:A5:100:100::>\n"
-        "  <Mask:A6:100:100::>\n"
-        "\n"
-        "  <##Code to IDA:R>\n" // 0
-        "  <##Code to CRC:R>\n" // 1
-        "  <##IDA to CRC:R>\n" // 2
-        "  <##IDA to Code:R>\n" // 3
-        "  <##IDA to Olly:R>\n" // 4
-        "  <##Olly to IDA:R>>\n" // 5
-        "\n"
-        "\n";
+	static const char szForm[] =
+		"Sig Converter\n"
+		"\n"
+		"\n"
+		"  <Sig:A5:100:100::>\n"
+		"  <Mask:A6:100:100::>\n"
+		"\n"
+		"  <##Code to IDA:R>\n"		// 0
+		"  <##Code to CRC:R>\n"		// 1
+		"  <##IDA to CRC:R>\n"		// 2
+		"  <##IDA to Code:R>\n"		// 3
+		"  <##IDA to Olly:R>\n"		// 4
+		"  <##Olly to IDA:R>>\n"	// 5
+		"\n"
+		"\n";
 
-    char szSigIn[MAXSTR] = { 0 };
-    char szMaskIn[MAXSTR] = { 0 };
+	qstring str_out;
 
-    ushort usCheckBox = 0;
+	char szSigIn[MAXSTR] = { 0 };
+	char szMaskIn[MAXSTR] = { 0 };
 
-    qstring strTemp;
+	ushort usCheckBox = 0;
 
-    if (ask_form( szForm, szSigIn, szMaskIn, &usCheckBox ) > 0)
-    {
-        strTemp = szSigIn;
-        qstring strSigIn = szSigIn;
-        qstring strMaskIn = szMaskIn;
-        ea_t dwCRC = 0, dwMask = 0;
+	if (ask_form(szForm, szSigIn, szMaskIn, &usCheckBox) > 0)
+	{
+		qstring strSigIn = szSigIn; //get input text 'singnature'
+		qstring strMaskIn = szMaskIn; //get input text 'mask'
 
-        switch (usCheckBox)
-        {
-        case 0:
-            CodeToIDA( strTemp, strSigIn, strMaskIn );
-            break;
-        case 1:
-            CodeToCRC( strSigIn, strMaskIn, dwCRC, dwMask );
-            strTemp.sprnt( "0x%x, 0x%x", dwCRC, dwMask );
-            break;
-        case 2:
-            IDAToCRC( strSigIn, dwCRC, dwMask );
-            strTemp.sprnt( "0x%x, 0x%x", dwCRC, dwMask );
-            break;
-        case 3:
-            IDAToCode( strTemp, strSigIn, szMaskIn );
-            strTemp.sprnt( "%s, %s", szSigIn, szMaskIn );
-            break;
-        case 4:
-            strTemp.replace( " ? ", " ?? " );
-            break;
-        case 5:
-            strTemp.replace( " ?? ", " ? " );
-            break;
-        }
-        if (TextToClipboard( strTemp.c_str( ) ) == false)
-        {
-            if (Settings.iLogLevel >= 1)
-            {
-                msg( "Converted: %s\n", strTemp.c_str( ) );
-            }
-        }
-    }
+		// CRC Convert variables
+		ea_t dwCRC = 0, dwMask = 0;
+
+		// Code Convert variables
+		qstring str_code; char szMask[MAXSTR] = { 0 };
+
+		switch (usCheckBox)
+		{
+		case 0: //Code to IDA
+			CodeToIDA(str_out, strSigIn, strMaskIn);
+			break;
+		case 1: //Code to CRC
+			CodeToCRC(strSigIn, strMaskIn, dwCRC, dwMask);
+			str_out.sprnt("0x%x, 0x%x", dwCRC, dwMask);
+			break;
+		case 2: //IDA to CRC
+			IDAToCRC(strSigIn, dwCRC, dwMask);
+			str_out.sprnt("0x%x, 0x%x", dwCRC, dwMask);
+			break;
+		case 3: //IDA to Code
+			IDAToCode(strSigIn, str_code, szMask);
+			str_out.sprnt("%s, %s", str_code.c_str(), szMask);
+			break;
+		case 4: //IDA to Olly
+			strSigIn.replace(" ? ", " ?? ");
+			str_out = strSigIn;
+			break;
+		case 5: //Olly to IDA
+			strSigIn.replace(" ?? ", " ? ");
+			str_out = strSigIn;
+			break;
+		}
+
+		TextToClipboard(str_out.c_str());
+
+		if (Settings.iLogLevel >= 1)
+		{
+			msg("Converted: %s\n", str_out.c_str());
+		}
+	}
 }
 
 bool GetNextByte( char** pszString, unsigned char& rByte, bool& isWhiteSpace )
@@ -93,7 +99,8 @@ bool GetNextByte( char** pszString, unsigned char& rByte, bool& isWhiteSpace )
     return false;
 }
 
-int Text2Hex( const char* pszString, unsigned char* pbArray, char* pszMask = NULL )
+//(pszString) IN IDA Signature, (pbArray) OUT Byte Array, (pszMask) OUT Mask
+int Text2Hex( const char* pszString, unsigned char* pbArray, char* pszMask )
 {
     int Count = 0;
     bool isWhiteSpace = false;
@@ -144,21 +151,25 @@ int CodeStyleToByte( const char* pszSignature, unsigned char* pbArray, char* psz
 }
 
 // To Code conversion
-void IDAToCode( const qstring& strSig, qstring& strByteSig, char* pszMask )
+void IDAToCode( const qstring& in_ida_sig, qstring& out_code_sig, char* pszMask)
 {
+	// variables
     unsigned char ucByteArray[MAXSTR];
-    int iCount = Text2Hex( strSig.c_str( ), ucByteArray, pszMask );
-    strByteSig.clear( );
 
+	// get ByteArray and Mask
+    int iCount = Text2Hex(in_ida_sig.c_str( ), ucByteArray, pszMask);
+
+	// create array of bytes
     for (int i = 0; i < iCount; i++)
-        strByteSig.cat_sprnt( "\\x%02X", ucByteArray[i] );
+        out_code_sig.cat_sprnt( "\\x%02X", ucByteArray[i] );
 }
 
 // to crc conversion
 void IDAToCRC( const qstring& strSig, ea_t& dwCRC32, ea_t& dwMask )
 {
+	char szMask[MAXSTR];
     unsigned char ucByteArray[MAXSTR];
-    char szMask[MAXSTR];
+   
     int iCount = Text2Hex( strSig.c_str( ), ucByteArray, szMask );
 
     for (int i = 0; i < 32; i++)
@@ -211,7 +222,7 @@ void CodeToIDA( qstring& strSig, const qstring& strByteSig, const qstring& strMa
     {
         if (strMask[i] == 'x' || strMask[i] == 'X')
         {
-            strSig.cat_sprnt( "0x%02X ", ucByteArray[i] );
+            strSig.cat_sprnt( "%02X ", ucByteArray[i] );
         }
         else
         {
